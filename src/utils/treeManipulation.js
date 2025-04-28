@@ -1,26 +1,13 @@
+import cloneDeep from "lodash/cloneDeep";
 import { v4 as uuidv4 } from "uuid";
-
-// Helper function to deep clone an object or array
-const deepClone = obj => {
-  if (Array.isArray(obj)) {
-    return obj.map(item => deepClone(item));
-  } else if (typeof obj === "object" && obj !== null) {
-    return Object.fromEntries(Object.entries(obj).map(([key, value]) => [key, deepClone(value)]));
-  }
-  return obj;
-};
-
-// Generate a new UUID for components using the uuid package
-export const generateUuid = () => {
-  return uuidv4();
-};
+import { canBeChild } from "@/utils/helpers";
 
 // Create a deep clone of a component with new UUIDs for the component and all children
 export const cloneComponentWithNewUuids = component => {
-  const cloned = deepClone(component);
+  const cloned = cloneDeep(component);
 
   // Generate new UUID for the component
-  cloned.uuid = generateUuid();
+  cloned.uuid = uuidv4();
 
   // Recursively update UUIDs for all children
   if (cloned.children && cloned.children.length > 0) {
@@ -90,7 +77,7 @@ export const duplicateComponentInTree = (tree, uuid) => {
   const duplicatedComponent = cloneComponentWithNewUuids(component);
 
   // Insert the duplicate after the original
-  const newTree = deepClone(tree);
+  const newTree = cloneDeep(tree);
   const traverseResult = traversePath(newTree, path);
 
   if (!traverseResult.valid) {
@@ -112,7 +99,7 @@ export const updateComponentInTree = (tree, path, updatedComponent) => {
     return updatedComponent || null;
   }
 
-  const newTree = deepClone(tree);
+  const newTree = cloneDeep(tree);
   const traverseResult = traversePath(newTree, path);
 
   if (!traverseResult.valid) {
@@ -137,7 +124,7 @@ export const updateComponentInTree = (tree, path, updatedComponent) => {
 export const addComponentToTree = (tree, path, newComponent) => {
   // If path is empty, add to mj-body (for initial section drop)
   if (!path || path.length === 0) {
-    const newTree = deepClone(tree);
+    const newTree = cloneDeep(tree);
     if (newTree.children?.[0]?.children) {
       newTree.children[0].children.push(newComponent);
     }
@@ -151,13 +138,13 @@ export const addComponentToTree = (tree, path, newComponent) => {
     path[2] === "children" &&
     tree.children?.[path[1]]
   ) {
-    const newTree = deepClone(tree);
+    const newTree = cloneDeep(tree);
     newTree.children[path[1]].children.push(newComponent);
     return newTree;
   }
 
   // Regular case - add component at path
-  const newTree = deepClone(tree);
+  const newTree = cloneDeep(tree);
   const traverseResult = traversePath(newTree, path);
 
   if (!traverseResult.valid) {
@@ -176,27 +163,9 @@ export const addComponentToTree = (tree, path, newComponent) => {
   return newTree;
 };
 
-// Helper function to check if a component of type can be a child of a parent
-export const canBeChild = (parentTagName, childType) => {
-  const nestingRules = {
-    "mj-column": [
-      "mj-text",
-      "mj-image",
-      "mj-button",
-      "mj-divider",
-      "mj-spacer",
-    ],
-    "mj-section": ["mj-column"],
-    "mj-body": ["mj-section"],
-  };
-
-  const allowedChildren = nestingRules[parentTagName] || [];
-  return allowedChildren.includes(childType);
-};
-
 // Helper function to move a component in the tree
 export const moveComponentInTree = (tree, fromPath, toPath) => {
-  const newTree = deepClone(tree);
+  const newTree = cloneDeep(tree);
 
   // Extract component from source
   const fromTraverse = traversePath(newTree, fromPath);
@@ -207,7 +176,7 @@ export const moveComponentInTree = (tree, fromPath, toPath) => {
 
   const { parent: fromParent, lastKey: fromKey, lastIndex: fromIndex } = fromTraverse;
   const componentToMove = fromParent[fromKey][fromIndex];
-  
+
   // Extract the target
   const toTraverse = traversePath(newTree, toPath);
   if (!toTraverse.valid) {
@@ -220,10 +189,10 @@ export const moveComponentInTree = (tree, fromPath, toPath) => {
   // Get the source and target parent paths
   const sourceParentPath = fromPath.slice(0, -2);
   const targetParentPath = toPath.slice(0, -2);
-  
+
   // Check if we're reordering within the same parent
   const sameParent = JSON.stringify(sourceParentPath) === JSON.stringify(targetParentPath);
-  
+
   // If moving between different parents, verify that the target parent can accept this component
   if (!sameParent) {
     const targetParentTraverse = traversePath(newTree, targetParentPath);
@@ -231,25 +200,25 @@ export const moveComponentInTree = (tree, fromPath, toPath) => {
       console.error("Invalid target parent in moveComponentInTree");
       return tree;
     }
-    
+
     const targetParent = targetParentTraverse.target;
-    
+
     // Check if the component can be a child of the target parent
     if (!canBeChild(targetParent.tagName, componentToMove.tagName)) {
       console.error("Component cannot be a child of the target parent");
       return tree;
     }
   }
-  
+
   // Now we can safely move the component
   fromParent[fromKey].splice(fromIndex, 1);
-  
+
   // Recalculate the toIndex if it's the same parent and the removal affects the index
   let adjustedToIndex = toIndex;
   if (sameParent && fromIndex < toIndex) {
     adjustedToIndex--;
   }
-  
+
   // Ensure we don't insert beyond the end of the array
   const safeIndex = Math.min(adjustedToIndex, toParent[toKey].length);
   toParent[toKey].splice(safeIndex, 0, componentToMove);
@@ -273,19 +242,4 @@ export const findParentSection = (tree, columnPath) => {
   if (target.tagName !== "mj-section") return null;
 
   return { section: target, path: sectionPath };
-};
-
-// Helper function to update vertical alignment for all columns in a section
-export const updateVerticalAlignForSection = (tree, columnPath, verticalAlign) => {
-  const parentResult = findParentSection(tree, columnPath);
-  if (!parentResult) return tree;
-
-  return updateComponentInTree(tree, parentResult.path, {
-    ...parentResult.section,
-    children: parentResult.section.children.map(column =>
-      column.tagName === "mj-column"
-        ? { ...column, attributes: { ...column.attributes, "vertical-align": verticalAlign } }
-        : column
-    ),
-  });
 };

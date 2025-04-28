@@ -8,7 +8,7 @@ import {
   TextProperties,
 } from "@/components/component-properties";
 import { COMPONENT_TYPES } from "@/constants/componentTypes";
-import { updateVerticalAlignForSection } from "@/utils/treeManipulation";
+import { updateVerticalAlignForSection } from "@/utils/helpers";
 import { Copy, Trash2 } from "lucide-react";
 import { useCallback } from "react";
 
