@@ -176,6 +176,24 @@ export const addComponentToTree = (tree, path, newComponent) => {
   return newTree;
 };
 
+// Helper function to check if a component of type can be a child of a parent
+export const canBeChild = (parentTagName, childType) => {
+  const nestingRules = {
+    "mj-column": [
+      "mj-text",
+      "mj-image",
+      "mj-button",
+      "mj-divider",
+      "mj-spacer",
+    ],
+    "mj-section": ["mj-column"],
+    "mj-body": ["mj-section"],
+  };
+
+  const allowedChildren = nestingRules[parentTagName] || [];
+  return allowedChildren.includes(childType);
+};
+
 // Helper function to move a component in the tree
 export const moveComponentInTree = (tree, fromPath, toPath) => {
   const newTree = deepClone(tree);
@@ -189,21 +207,51 @@ export const moveComponentInTree = (tree, fromPath, toPath) => {
 
   const { parent: fromParent, lastKey: fromKey, lastIndex: fromIndex } = fromTraverse;
   const componentToMove = fromParent[fromKey][fromIndex];
-  fromParent[fromKey].splice(fromIndex, 1);
-
-  // Add component to target
+  
+  // Extract the target
   const toTraverse = traversePath(newTree, toPath);
   if (!toTraverse.valid) {
-    // Restore component to original position
-    fromParent[fromKey].splice(fromIndex, 0, componentToMove);
     console.error("Invalid target path in moveComponentInTree:", toPath);
     return tree;
   }
 
-  const { parent: toParent, lastKey: toKey, lastIndex: toIndex } = toTraverse;
+  const { target: toTarget, parent: toParent, lastKey: toKey, lastIndex: toIndex } = toTraverse;
 
+  // Get the source and target parent paths
+  const sourceParentPath = fromPath.slice(0, -2);
+  const targetParentPath = toPath.slice(0, -2);
+  
+  // Check if we're reordering within the same parent
+  const sameParent = JSON.stringify(sourceParentPath) === JSON.stringify(targetParentPath);
+  
+  // If moving between different parents, verify that the target parent can accept this component
+  if (!sameParent) {
+    const targetParentTraverse = traversePath(newTree, targetParentPath);
+    if (!targetParentTraverse.valid || !targetParentTraverse.target) {
+      console.error("Invalid target parent in moveComponentInTree");
+      return tree;
+    }
+    
+    const targetParent = targetParentTraverse.target;
+    
+    // Check if the component can be a child of the target parent
+    if (!canBeChild(targetParent.tagName, componentToMove.tagName)) {
+      console.error("Component cannot be a child of the target parent");
+      return tree;
+    }
+  }
+  
+  // Now we can safely move the component
+  fromParent[fromKey].splice(fromIndex, 1);
+  
+  // Recalculate the toIndex if it's the same parent and the removal affects the index
+  let adjustedToIndex = toIndex;
+  if (sameParent && fromIndex < toIndex) {
+    adjustedToIndex--;
+  }
+  
   // Ensure we don't insert beyond the end of the array
-  const safeIndex = Math.min(toIndex, toParent[toKey].length);
+  const safeIndex = Math.min(adjustedToIndex, toParent[toKey].length);
   toParent[toKey].splice(safeIndex, 0, componentToMove);
 
   return newTree;

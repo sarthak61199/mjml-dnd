@@ -40,34 +40,74 @@ const ComponentNode = ({ node, onSelect, selectedId, path, onDrop, onMove }) => 
     }),
   });
 
+  // Check if an item can be dropped in this container
   const canDrop = useCallback(
     item => {
-      const allowedChildren = NESTING_RULES[node.tagName] || [];
-      return allowedChildren.includes(item.type);
+      // For new components, check if the type is allowed
+      if (item.isNew) {
+        const allowedChildren = NESTING_RULES[node.tagName] || [];
+        return allowedChildren.includes(item.type);
+      } 
+      
+      // For reordering (moving) existing components
+      else {
+        // Allow only if the parent path is the same (reordering within the same parent)
+        // or if the type matches the nesting rules
+        const itemParentPath = item.path.slice(0, -2);
+        const thisParentPath = path.slice(0, -2);
+        
+        // If we're dropping into ourselves, allow only if the type is allowed
+        if (node.uuid === item.uuid) {
+          return false;
+        }
+        
+        // Same parent = reordering within the same container (allowed)
+        const sameParent = JSON.stringify(itemParentPath) === JSON.stringify(thisParentPath);
+        
+        // Different parent = moving to new container (check type compatibility)
+        if (!sameParent) {
+          const allowedChildren = NESTING_RULES[node.tagName] || [];
+          return allowedChildren.includes(item.type);
+        }
+        
+        return true;
+      }
     },
-    [node.tagName]
+    [node.tagName, node.uuid, path]
   );
 
   const handleDrop = useCallback(
     (item, monitor) => {
       if (monitor.didDrop()) return;
 
+      // For new components
       if (item.isNew) {
         onDrop(item.type, path);
-      } else if (JSON.stringify(item.path) !== JSON.stringify(path)) {
-        onMove(item.path, path);
+      } 
+      // For reordering existing components
+      else if (JSON.stringify(item.path) !== JSON.stringify(path)) {
+        // Check if we're moving within the same parent (reordering)
+        const sourceParentPath = item.path.slice(0, -2);
+        const targetParentPath = path.slice(0, -2);
+        const sameParent = JSON.stringify(sourceParentPath) === JSON.stringify(targetParentPath);
+        
+        // Allow reordering within the same parent or moving to a valid parent
+        if (sameParent || canDrop(item)) {
+          onMove(item.path, path);
+        }
       }
     },
-    [path, onDrop, onMove]
+    [path, onDrop, onMove, canDrop]
   );
 
-  const [{ isOver, canDropHere }, drop] = useDrop({
+  const [{ isOver, canDropHere, isReordering }, drop] = useDrop({
     accept: "COMPONENT",
     drop: handleDrop,
     canDrop,
     collect: monitor => ({
       isOver: !!monitor.isOver({ shallow: true }),
       canDropHere: !!monitor.canDrop(),
+      isReordering: !!monitor.getItem() && !monitor.getItem().isNew,
     }),
   });
 
@@ -80,6 +120,22 @@ const ComponentNode = ({ node, onSelect, selectedId, path, onDrop, onMove }) => 
     },
     [node, onSelect]
   );
+
+  // Determine appropriate drop zone styling
+  const getDropIndicatorClass = () => {
+    if (!isOver) return "";
+    
+    if (canDropHere && isReordering) {
+      // Valid reordering drop zone
+      return "outline outline-2 outline-blue-400 bg-blue-50";
+    } else if (canDropHere) {
+      // Valid new component drop zone
+      return "outline outline-2 outline-green-400 bg-green-50";
+    } else {
+      // Invalid drop zone
+      return "outline outline-2 outline-red-400 bg-red-50";
+    }
+  };
 
   const renderChildren = useCallback(() => {
     return (node.children || []).map((child, index) => (
@@ -217,8 +273,7 @@ const ComponentNode = ({ node, onSelect, selectedId, path, onDrop, onMove }) => 
       ref={ref}
       className={`mb-2 
         ${isDragging ? "opacity-50" : "opacity-100"} 
-        ${isOver && canDropHere ? "bg-blue-100" : ""} 
-        ${isOver && !canDropHere ? "bg-red-100" : ""}
+        ${getDropIndicatorClass()}
         ${isSelected ? "ring-2 ring-blue-500" : ""}`}
       onClick={handleClick}
     >

@@ -25,6 +25,7 @@ const MjmlEmailEditor = () => {
     enhancedSelectedComponent,
     showDeleteConfirm,
     setShowDeleteConfirm,
+    moveError,
     handleAddComponent,
     handleMoveComponent,
     handleDeleteComponent,
@@ -89,6 +90,7 @@ const MjmlEmailEditor = () => {
             onMoveComponent={handleMoveComponent}
             selectedComponent={selectedComponent}
             setSelectedComponent={setSelectedComponent}
+            moveError={moveError}
           />
         ) : (
           <Suspense
@@ -134,6 +136,8 @@ const MjmlEmailEditor = () => {
     handleDeleteComponent,
     handleDuplicateComponent,
     showDeleteConfirm,
+    setShowDeleteConfirm,
+    moveError,
   ]);
 
   return (

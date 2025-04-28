@@ -1,7 +1,7 @@
 import ComponentNode from "@/components/ComponentNode";
 import { COMPONENT_TYPES } from "@/constants/componentTypes";
 import { createComponent } from "@/utils/componentCreator";
-import { useCallback } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { useDrop } from "react-dnd";
 
 // Email canvas where components are dropped
@@ -11,7 +11,25 @@ const EmailCanvas = ({
   onMoveComponent,
   selectedComponent,
   setSelectedComponent,
+  moveError,
 }) => {
+  const [draggedItem, setDraggedItem] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
+  
+  // Handle displaying move errors
+  useEffect(() => {
+    if (moveError) {
+      setErrorMessage(moveError.message);
+      
+      // Clear the error message after 3 seconds
+      const timeout = setTimeout(() => {
+        setErrorMessage(null);
+      }, 3000);
+      
+      return () => clearTimeout(timeout);
+    }
+  }, [moveError]);
+
   const handleDrop = useCallback(
     (item, monitor) => {
       if (monitor.didDrop()) return;
@@ -24,6 +42,9 @@ const EmailCanvas = ({
       ) {
         onAddComponent(createComponent(item.type), ["children", 0, "children"]);
       }
+      
+      // Reset dragged item when drop completes
+      setDraggedItem(null);
     },
     [mjmlJson, onAddComponent]
   );
@@ -31,6 +52,10 @@ const EmailCanvas = ({
   const [{ isOver }, drop] = useDrop({
     accept: "COMPONENT",
     drop: handleDrop,
+    hover: (item) => {
+      // Track which item is being dragged for better UI feedback
+      setDraggedItem(item);
+    },
     collect: monitor => ({
       isOver: monitor.isOver({ shallow: true }),
     }),
@@ -68,6 +93,20 @@ const EmailCanvas = ({
           />
         )}
       </div>
+      
+      {/* Reordering indicator */}
+      {draggedItem && !draggedItem.isNew && (
+        <div className="fixed bottom-4 right-4 bg-blue-500 text-white px-4 py-2 rounded shadow-lg z-50">
+          Reordering: {draggedItem.type.replace('mj-', '')}
+        </div>
+      )}
+      
+      {/* Error message */}
+      {errorMessage && (
+        <div className="fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded shadow-lg z-50 animate-fade-in">
+          {errorMessage}
+        </div>
+      )}
     </div>
   );
 };
